@@ -3,6 +3,7 @@
 import itertools
 import os
 import secrets
+import time
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -19,11 +20,12 @@ USERS = {
     "bob": {"pw": generate_password_hash(_DEMO_PASSWORD), "balance": 0.0},
 }
 
-SESSIONS = {}          # token -> username
+SESSIONS = {}          # token -> (username, expiration_time)
 CARTS = {}             # username -> list of {sku, qty}
 ORDERS = {}            # order id -> {id, owner, lines, total}
 
 _order_ids = itertools.count(1000)
+_SESSION_TIMEOUT = 3600  # 1 hour in seconds
 
 
 def login(username, password):
@@ -31,12 +33,19 @@ def login(username, password):
     if not user or not check_password_hash(user["pw"], password):
         return None
     token = secrets.token_hex(16)
-    SESSIONS[token] = username
+    SESSIONS[token] = (username, time.time() + _SESSION_TIMEOUT)
     return token
 
 
 def user_for_token(token):
-    return SESSIONS.get(token)
+    entry = SESSIONS.get(token)
+    if not entry:
+        return None
+    username, expiration_time = entry
+    if time.time() > expiration_time:
+        del SESSIONS[token]
+        return None
+    return username
 
 
 def cart_of(username):

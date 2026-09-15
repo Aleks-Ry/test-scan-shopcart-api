@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ShopCart</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.4rem; }
+  section { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+  h2 { font-size: 1rem; margin-top: 0; }
+  label { display: inline-block; min-width: 70px; }
+  input { padding: .3rem; margin: .2rem 0; }
+  button { padding: .4rem .8rem; margin: .3rem .3rem .3rem 0; cursor: pointer; }
+  table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+  td, th { text-align: left; padding: .3rem; border-bottom: 1px solid #eee; }
+  pre { background: #f6f6f6; padding: .6rem; border-radius: 4px; overflow-x: auto; font-size: .85rem; }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  #whoami { font-weight: bold; }
+  .hint { color: #888; font-size: .8rem; }
+</style>
+</head>
+<body>
+<h1>ShopCart</h1>
+<p id="whoami">not logged in</p>
+
+<section>
+  <h2>Login</h2>
+  <div class="row">
+    <label>User</label><input id="username" value="alice">
+    <label>Pass</label><input id="password" value="demo" type="password">
+    <button onclick="login()">Login</button>
+    <button onclick="quick('alice')">Quick: alice</button>
+    <button onclick="quick('bob')">Quick: bob</button>
+  </div>
+</section>
+
+<section>
+  <h2>Catalog</h2>
+  <div id="catalog"></div>
+</section>
+
+<section>
+  <h2>Cart</h2>
+  <div class="row">
+    <label>SKU</label><input id="sku" value="SKU-TEA">
+    <label>Qty</label><input id="qty" value="1" type="number">
+    <button onclick="addToCart()">Add</button>
+  </div>
+  <div id="cart"></div>
+  <button onclick="checkout()">Checkout</button>
+</section>
+
+<section>
+  <h2>Orders</h2>
+  <button onclick="listOrders()">My orders</button>
+  <div class="row">
+    <label>Order ID</label><input id="orderId" value="1000">
+    <button onclick="viewOrder()">View order</button>
+  </div>
+  <p class="hint">"View order" fetches any id, not just your own — try it while logged in as a different user than the order's owner.</p>
+  <div id="orders"></div>
+</section>
+
+<section>
+  <h2>Raw response</h2>
+  <pre id="out">-</pre>
+</section>
+
+<script>
+let token = null;
+
+function show(data) {
+  document.getElementById('out').textContent = JSON.stringify(data, null, 2);
+  return data;
+}
+
+async function call(path, opts = {}) {
+  opts.headers = opts.headers || {};
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (opts.body) opts.headers['Content-Type'] = 'application/json';
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  show(data);
+  return data;
+}
+
+async function login() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const data = await call('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+  if (data.token) {
+    token = data.token;
+    await whoami();
+  }
+}
+
+function quick(user) {
+  document.getElementById('username').value = user;
+  document.getElementById('password').value = 'demo';
+  login();
+}
+
+async function whoami() {
+  const data = await call('/me');
+  if (data.username) {
+    document.getElementById('whoami').textContent =
+      `${data.username} — balance: ${data.balance}`;
+  }
+}
+
+async function loadCatalog() {
+  const data = await call('/catalog');
+  const rows = Object.entries(data).map(([sku, item]) =>
+    `<tr><td>${sku}</td><td>${item.name}</td><td>${item.price}</td></tr>`).join('');
+  document.getElementById('catalog').innerHTML =
+    `<table><tr><th>SKU</th><th>Name</th><th>Price</th></tr>${rows}</table>`;
+}
+
+async function addToCart() {
+  const sku = document.getElementById('sku').value;
+  const qty = Number(document.getElementById('qty').value);
+  await call('/cart/items', { method: 'POST', body: JSON.stringify({ sku, qty }) });
+  await viewCart();
+}
+
+async function viewCart() {
+  const data = await call('/cart');
+  if (!data.lines) return;
+  const rows = data.lines.map(l => `<tr><td>${l.sku}</td><td>${l.qty}</td></tr>`).join('');
+  document.getElementById('cart').innerHTML =
+    `<table><tr><th>SKU</th><th>Qty</th></tr>${rows}</table><p>Total: ${data.total}</p>`;
+}
+
+async function checkout() {
+  await call('/checkout', { method: 'POST' });
+  await whoami();
+  await viewCart();
+}
+
+async function listOrders() {
+  const data = await call('/orders');
+  renderOrders(data.orders || []);
+}
+
+async function viewOrder() {
+  const id = document.getElementById('orderId').value;
+  const data = await call('/orders/' + id);
+  renderOrders(data.order ? [data.order] : []);
+}
+
+function renderOrders(orders) {
+  if (!orders.length) { document.getElementById('orders').innerHTML = '<p>none</p>'; return; }
+  const rows = orders.map(o =>
+    `<tr><td>${o.id}</td><td>${o.owner}</td><td>${o.total}</td><td>${o.lines.length} line(s)</td></tr>`).join('');
+  document.getElementById('orders').innerHTML =
+    `<table><tr><th>ID</th><th>Owner</th><th>Total</th><th>Lines</th></tr>${rows}</table>`;
+}
+
+loadCatalog();
+</script>
+</body>
+</html>

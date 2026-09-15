@@ -13,6 +13,10 @@ pip install -r requirements.txt
 python app.py          # http://127.0.0.1:5001
 ```
 
+Open `http://127.0.0.1:5001/` in a browser for a minimal UI over the same
+endpoints (login, catalog, cart, checkout, orders) — served straight from
+`static/index.html`, no build step.
+
 ## Endpoints
 
 | Method | Path                 | Purpose                              |

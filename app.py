@@ -1,10 +1,15 @@
 """Cart and order HTTP API."""
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 
 import store
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", static_url_path="")
+
+
+@app.get("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
 
 
 def current_user():
